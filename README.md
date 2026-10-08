@@ -10,29 +10,27 @@ app. No Mac, no Xcode, no App Store build.
 Lock screen widgets sit in the row under the clock (or the single line above it).
 They are fixed there, not notifications, so there is nothing to swipe away.
 
-```
-            Thu 8 Oct
-          12:00
- ┌──────────────────────────┐ ┌──────┐
- │ 5h ━━━━━━━──────  42% 14:30│ │ ◜42%◝ │
- │ 7d ━━─────────── 18%   Tue │ │  5h  │
- │ Claude · 12:00            │ └──────┘
- └──────────────────────────┘
-   rectangular (2 slots)       circular (1 slot)
-```
+![Circular and rectangular widgets](docs/preview.png)
+
+*Mockup rendered from the script's own drawing code; on the phone iOS tints it to
+match the lock screen.*
 
 | Widget | Shows |
 | --- | --- |
-| Rectangular | both windows: bar, percent, reset time (clock time if under 12 h away, else weekday), last update |
-| Circular | a ring for the 5 h window (parameter `7d` for the weekly one) |
-| Inline (above the clock) | `Claude 5h 42% · 14:30` |
+| Circular | gauge = how much of the 5 h window is used; center = time until it resets (`4h` big, `38m` small; under an hour `38` / `min`). Parameter `7d` shows the week (`4d` / `21h`) |
+| Rectangular | `5h: 4h 38m` and `Week: 4d 21h`, each with a bar for how much is used |
+| Inline (above the clock) | `Claude 5h 42% · 4h 38m` |
 | Home screen small / medium / large | same as rectangular, in color |
+
+`unused` means the window has not started (or just reset). The countdown is
+worked out when iOS redraws the widget, so between redraws it can run a few
+minutes behind.
 
 Tapping the widget opens claude.ai's usage page. If the widget needs you (not
 set up, or the session expired) tapping it opens the script instead.
 
 When the phone is offline or claude.ai is unreachable, the widget keeps showing
-the last numbers it got and the status line says why (`offline · 11:40`). A
+the last numbers it got and says why (`offline`) next to the 5h line. A
 window whose reset time has passed shows 0% even before the next refresh.
 
 ## Setup
