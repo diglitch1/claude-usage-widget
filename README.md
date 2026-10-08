@@ -10,14 +10,15 @@ app. No Mac, no Xcode, no App Store build.
 Lock screen widgets sit in the row under the clock (or the single line above it).
 They are fixed there, not notifications, so there is nothing to swipe away.
 
-![Circular and rectangular widgets](docs/preview.png)
+![Circular widget](docs/circular.png)
+![Rectangular widget](docs/rectangular.png)
 
-*Mockup rendered from the script's own drawing code; on the phone iOS tints it to
-match the lock screen.*
+*Mockups rendered from the script's own drawing code; on the phone iOS tints them
+to match the lock screen.*
 
 | Widget | Shows |
 | --- | --- |
-| Circular | gauge = how much of the 5 h window is used; center = time until it resets (`4h` big, `38m` small; under an hour `38` / `min`). Parameter `7d` shows the week (`4d` / `21h`) |
+| Circular | bold outer arc = 5 h window used, thin inner arc = week used, center = time until the 5 h reset (`1h` big, `44m` small; under an hour `38` / `min`), bottom = 5 h percent. Parameter `7d` swaps the two windows |
 | Rectangular | `5h: 4h 38m` and `Week: 4d 21h`, each with a bar for how much is used |
 | Inline (above the clock) | `Claude 5h 42% · 4h 38m` |
 | Home screen small / medium / large | same as rectangular, in color |
