@@ -140,16 +140,25 @@ function clockTime(ms) {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
-// Short form for the widget: a clock time when the reset is under 12 hours away,
-// otherwise just the weekday.
-function formatReset(resetAt, now) {
-  if (resetAt === null || resetAt === undefined) {
-    return "--";
+// Time left until a reset, split for the circular widget: the big part on top,
+// the smaller one under it. Rounds minutes up so it never shows "0m" early.
+function countdownParts(resetAt, now) {
+  const minutes = Math.max(1, Math.ceil((resetAt - now) / 60000));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+  if (days > 0) {
+    return { big: `${days}d`, small: `${hours}h` };
   }
-  if (resetAt - now < 12 * 60 * 60 * 1000) {
-    return clockTime(resetAt);
+  if (hours > 0) {
+    return { big: `${hours}h`, small: `${mins}m` };
   }
-  return DAYS[new Date(resetAt).getDay()];
+  return { big: `${mins}`, small: "min" };
+}
+
+function formatCountdown(resetAt, now) {
+  const parts = countdownParts(resetAt, now);
+  return parts.small === "min" ? `${parts.big}m` : `${parts.big} ${parts.small}`;
 }
 
 function formatResetLong(resetAt, now) {
@@ -336,39 +345,55 @@ function barImage(percent, width, height, fill, track) {
   return ctx.getImage();
 }
 
-function arcPath(center, radius, fraction) {
+// A thick arc with round ends, as one closed shape. Filling one shape (instead
+// of stroking and adding cap dots) keeps semi-transparent tracks even.
+function arcBand(center, radius, width, start, sweep) {
   const path = new Path();
-  const steps = Math.max(2, Math.ceil(fraction * 120));
-  for (let i = 0; i <= steps; i++) {
-    const angle = -Math.PI / 2 + 2 * Math.PI * fraction * (i / steps);
-    const point = new Point(center + radius * Math.cos(angle), center + radius * Math.sin(angle));
-    if (i === 0) {
-      path.move(point);
-    } else {
-      path.addLine(point);
+  const half = width / 2;
+  const at = (r, angle) => new Point(center + r * Math.cos(angle), center + r * Math.sin(angle));
+  const steps = Math.max(2, Math.ceil((sweep / (2 * Math.PI)) * 120));
+  const cap = (angle, from) => {
+    const mid = at(radius, angle);
+    for (let i = 1; i <= 12; i++) {
+      const phi = from + Math.PI * (i / 12);
+      path.addLine(new Point(mid.x + half * Math.cos(phi), mid.y + half * Math.sin(phi)));
     }
+  };
+
+  path.move(at(radius + half, start));
+  for (let i = 1; i <= steps; i++) {
+    path.addLine(at(radius + half, start + sweep * (i / steps)));
   }
+  cap(start + sweep, start + sweep);
+  for (let i = steps - 1; i >= 0; i--) {
+    path.addLine(at(radius - half, start + sweep * (i / steps)));
+  }
+  cap(start, start + Math.PI);
+  path.closeSubpath();
   return path;
 }
 
-function ringImage(percent) {
+// Gauge open at the bottom, like Apple's own circular widgets. The bold part is
+// the share of the window already used.
+function gaugeImage(percent) {
   const size = 120;
-  const line = 11;
+  const width = 12;
+  const start = 0.75 * Math.PI;
+  const sweep = 1.5 * Math.PI;
+  const radius = size / 2 - width / 2 - 4;
   const ctx = new DrawContext();
   ctx.size = new Size(size, size);
   ctx.opaque = false;
   ctx.respectScreenScale = false;
-  ctx.setLineWidth(line);
-  const radius = size / 2 - line / 2 - 3;
 
-  ctx.addPath(arcPath(size / 2, radius, 1));
-  ctx.setStrokeColor(new Color("#FFFFFF", 0.25));
-  ctx.strokePath();
+  ctx.addPath(arcBand(size / 2, radius, width, start, sweep));
+  ctx.setFillColor(new Color("#FFFFFF", 0.3));
+  ctx.fillPath();
 
   if (percent > 0) {
-    ctx.addPath(arcPath(size / 2, radius, Math.min(percent, 100) / 100));
-    ctx.setStrokeColor(Color.white());
-    ctx.strokePath();
+    ctx.addPath(arcBand(size / 2, radius, width, start, (sweep * Math.min(percent, 100)) / 100));
+    ctx.setFillColor(Color.white());
+    ctx.fillPath();
   }
   return ctx.getImage();
 }
@@ -390,64 +415,70 @@ function addLine(container, text, font, opacity, color) {
   return line;
 }
 
-function statusLine(state) {
-  const time = state.result ? clockTime(state.result.fetchedAt) : "";
-  if (state.error) {
-    return `${ERRORS[state.error.kind].short} · ${time}`;
-  }
-  return `Claude · ${time}`;
+// What the countdown says when there is nothing to count down.
+function idleText(win) {
+  return win ? "unused" : "--";
 }
 
 function buildRectangular(widget, state, now, theme) {
-  const titleSize = theme.home ? 14 : 12;
-  const rowSize = theme.home ? 14 : 12;
+  const size = theme.home ? 15 : 13;
 
   if (!state.result) {
     const error = ERRORS[state.error ? state.error.kind : "no-key"];
-    addLine(widget, "Claude usage", Font.semiboldSystemFont(titleSize), 0.7, theme.text);
-    addLine(widget, error.title, Font.boldSystemFont(rowSize + 2), 1, theme.text);
-    addLine(widget, error.hint, Font.systemFont(rowSize - 1), 0.7, theme.text);
+    addLine(widget, "Claude usage", Font.semiboldRoundedSystemFont(size - 1), 0.7, theme.text);
+    addLine(widget, error.title, Font.boldRoundedSystemFont(size + 1), 1, theme.text);
+    addLine(widget, error.hint, Font.mediumRoundedSystemFont(size - 2), 0.7, theme.text);
     return;
   }
 
   const usage = state.result.usage;
-  const rows = [
-    ["5h", currentWindow(usage.fiveHour, now)],
-    ["7d", currentWindow(usage.sevenDay, now)]
-  ];
-  widget.spacing = theme.home ? 6 : 2;
+  const blocks = [["5h:", usage.fiveHour], ["Week:", usage.sevenDay]];
+  blocks.forEach(([label, raw], index) => {
+    const win = currentWindow(raw, now);
+    if (index > 0) {
+      widget.addSpacer(theme.home ? 10 : 4);
+    }
 
-  for (const [label, win] of rows) {
-    const row = widget.addStack();
-    row.layoutHorizontally();
-    row.centerAlignContent();
-    row.spacing = 5;
+    const head = widget.addStack();
+    head.layoutHorizontally();
+    head.centerAlignContent();
+    head.spacing = 4;
+    addLine(head, label, Font.boldRoundedSystemFont(size), 1, theme.text);
+    const resetIn = win && win.resetAt !== null ? formatCountdown(win.resetAt, now) : idleText(win);
+    addLine(head, resetIn, Font.mediumRoundedSystemFont(size), 1, theme.text);
+    if (index === 0 && state.error) {
+      // Cached numbers: say why they are not fresh.
+      head.addSpacer();
+      addLine(head, ERRORS[state.error.kind].short, Font.mediumRoundedSystemFont(size - 3), 0.6, theme.text);
+    }
 
-    const labelCell = row.addStack();
-    labelCell.size = new Size(theme.home ? 20 : 17, 0);
-    addLine(labelCell, label, Font.semiboldSystemFont(rowSize), 1, theme.text);
-
-    const bar = row.addImage(
-      barImage(win ? win.percent : 0, theme.barWidth, 6, theme.fill, theme.track)
+    widget.addSpacer(3);
+    const bar = widget.addImage(
+      barImage(win ? win.percent : 0, theme.barWidth, theme.barHeight, theme.fill, theme.track)
     );
-    bar.imageSize = new Size(theme.barWidth, 6);
-
-    const percentCell = row.addStack();
-    percentCell.size = new Size(theme.home ? 38 : 32, 0);
-    addLine(percentCell, percentText(win), Font.semiboldSystemFont(rowSize), 1, theme.text).rightAlignText();
-
-    row.addSpacer();
-    addLine(row, win ? formatReset(win.resetAt, now) : "--", Font.mediumSystemFont(rowSize), 0.8, theme.text);
-  }
-
-  addLine(widget, statusLine(state), Font.mediumSystemFont(theme.home ? 11 : 10), 0.6, theme.text);
+    bar.imageSize = new Size(theme.barWidth, theme.barHeight);
+  });
 }
 
 function buildCircular(widget, state, now, windowKey) {
   widget.addAccessoryWidgetBackground = true;
   const usage = state.result && state.result.usage;
   const win = usage ? currentWindow(usage[windowKey], now) : null;
-  widget.backgroundImage = ringImage(win ? win.percent : 0);
+  widget.backgroundImage = gaugeImage(win ? win.percent : 0);
+
+  let big;
+  let small;
+  if (!usage) {
+    big = "!";
+    small = ERRORS[state.error ? state.error.kind : "no-key"].short;
+  } else {
+    const parts = win && win.resetAt !== null ? countdownParts(win.resetAt, now) : null;
+    big = parts ? parts.big : windowKey === "sevenDay" ? "7d" : "5h";
+    small = parts ? parts.small : idleText(win);
+    if (state.error) {
+      small = ERRORS[state.error.kind].short;
+    }
+  }
 
   const centered = (text, font, opacity) => {
     const row = widget.addStack();
@@ -456,15 +487,9 @@ function buildCircular(widget, state, now, windowKey) {
     addLine(row, text, font, opacity);
     row.addSpacer();
   };
-
   widget.addSpacer();
-  if (state.result) {
-    centered(percentText(win), Font.boldSystemFont(14));
-  } else {
-    centered("!", Font.boldSystemFont(16));
-  }
-  const label = state.error ? ERRORS[state.error.kind].short : windowKey === "sevenDay" ? "7d" : "5h";
-  centered(label, Font.mediumSystemFont(9), 0.8);
+  centered(big, Font.boldRoundedSystemFont(20));
+  centered(small, Font.mediumRoundedSystemFont(11), 0.8);
   widget.addSpacer();
 }
 
@@ -475,16 +500,16 @@ function buildInline(widget, state, now, windowKey) {
     text = `Claude: ${ERRORS[state.error ? state.error.kind : "no-key"].short}`;
   } else {
     const win = currentWindow(usage[windowKey], now);
-    const label = windowKey === "sevenDay" ? "7d" : "5h";
+    const label = windowKey === "sevenDay" ? "Week" : "5h";
     text = `Claude ${label} ${percentText(win)}`;
     if (win && win.resetAt !== null) {
-      text += ` · ${formatReset(win.resetAt, now)}`;
+      text += ` · ${formatCountdown(win.resetAt, now)}`;
     }
     if (state.error) {
       text += " (old)";
     }
   }
-  addLine(widget, text, Font.mediumSystemFont(12));
+  addLine(widget, text, Font.mediumRoundedSystemFont(12));
 }
 
 function buildWidget(family, state, now, parameter) {
@@ -502,7 +527,8 @@ function buildWidget(family, state, now, parameter) {
   } else if (family === "accessoryRectangular") {
     buildRectangular(widget, state, now, {
       home: false,
-      barWidth: 50,
+      barWidth: 150,
+      barHeight: 6,
       fill: Color.white(),
       track: new Color("#FFFFFF", 0.25)
     });
@@ -511,7 +537,8 @@ function buildWidget(family, state, now, parameter) {
     widget.backgroundColor = new Color(HOME_BACKGROUND);
     buildRectangular(widget, state, now, {
       home: true,
-      barWidth: family === "small" ? 36 : 120,
+      barWidth: family === "small" ? 123 : 290,
+      barHeight: 8,
       fill: new Color(HOME_ACCENT),
       track: new Color("#FFFFFF", 0.15),
       text: Color.white()
@@ -702,7 +729,7 @@ async function main() {
 if (typeof __CLAUDE_USAGE_TEST__ === "function") {
   __CLAUDE_USAGE_TEST__({
     normalizeSessionKey, looksLikeSessionKey, readWindow, normalizeUsage, pickOrganization,
-    currentWindow, formatReset, formatResetLong, nextRefresh, describe, buildWidget, main
+    currentWindow, countdownParts, formatCountdown, formatResetLong, nextRefresh, describe, buildWidget, main
   });
 } else {
   await main();

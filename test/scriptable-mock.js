@@ -65,7 +65,10 @@ function createRuntime(options = {}) {
     systemFont: fontFactory("regular"),
     mediumSystemFont: fontFactory("medium"),
     semiboldSystemFont: fontFactory("semibold"),
-    boldSystemFont: fontFactory("bold")
+    boldSystemFont: fontFactory("bold"),
+    mediumRoundedSystemFont: fontFactory("medium-rounded"),
+    semiboldRoundedSystemFont: fontFactory("semibold-rounded"),
+    boldRoundedSystemFont: fontFactory("bold-rounded")
   };
 
   class Image { constructor(ops) { this.ops = ops; } }
@@ -75,6 +78,7 @@ function createRuntime(options = {}) {
     move(p) { this.ops.push(["move", p]); }
     addLine(p) { this.ops.push(["line", p]); }
     addRoundedRect(rect, cw, ch) { this.ops.push(["rrect", rect, cw, ch]); }
+    closeSubpath() { this.ops.push(["close"]); }
   }
 
   class DrawContext {

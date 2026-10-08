@@ -102,13 +102,19 @@ test("the strongest chat org wins over API-only orgs", async () => {
   assert.equal(h.pickOrganization({ error: "x" }), null);
 });
 
-test("reset times: clock under 12 hours, weekday beyond", async () => {
+test("countdown: big unit on top, smaller one under it", async () => {
   const h = await loadHelpers({ now: NOW });
-  assert.equal(h.formatReset(Date.parse("2026-10-08T12:30:00Z"), NOW), "14:30");
-  const late = Date.parse("2026-10-08T20:00:00Z"); // 22:00
-  assert.equal(h.formatReset(Date.parse("2026-10-08T23:05:00Z"), late), "01:05"); // past midnight
-  assert.equal(h.formatReset(Date.parse("2026-10-13T07:00:00Z"), NOW), "Tue");
-  assert.equal(h.formatReset(null, NOW), "--");
+  const min = 60 * 1000;
+  const parts = (ms) => plain(h.countdownParts(NOW + ms, NOW));
+  assert.deepEqual(parts((4 * 60 + 38) * min), { big: "4h", small: "38m" });
+  assert.deepEqual(parts((4 * 60 + 37) * min + 10000), { big: "4h", small: "38m" }, "rounds up");
+  assert.deepEqual(parts(5 * 60 * min), { big: "5h", small: "0m" });
+  assert.deepEqual(parts(38 * min), { big: "38", small: "min" });
+  assert.deepEqual(parts(5000), { big: "1", small: "min" }, "never 0 before the reset");
+  assert.deepEqual(parts((4 * 1440 + 21 * 60 + 5) * min), { big: "4d", small: "21h" });
+  assert.equal(h.formatCountdown(NOW + (2 * 60 + 30) * min, NOW), "2h 30m");
+  assert.equal(h.formatCountdown(NOW + 9 * min, NOW), "9m");
+  assert.equal(h.formatCountdown(NOW + 3 * 1440 * min, NOW), "3d 0h");
   assert.equal(h.formatResetLong(Date.parse("2026-10-08T12:30:00Z"), NOW), "resets today 14:30");
   assert.equal(h.formatResetLong(Date.parse("2026-10-13T07:00:00Z"), NOW), "resets Tue 09:00");
 });
@@ -133,7 +139,10 @@ test("refresh comes right after a reset that is due soon", async () => {
 
 test("rectangular lock screen widget shows both windows", async () => {
   const { run, w, t } = await widget({ family: "accessoryRectangular" });
-  assert.deepEqual(t, ["5h", "42%", "14:30", "7d", "18%", "Tue", "Claude · 12:00"]);
+  assert.deepEqual(t, ["5h:", "2h 30m", "Week:", "4d 21h"]);
+  const bars = w.children.filter((c) => c.kind === "image");
+  assert.equal(bars.length, 2, "one bar per window");
+  assert.equal(bars[0].imageSize.width, 150);
   assert.equal(w.url, "https://claude.ai/settings/usage");
   assert.equal(w.refreshAfterDate.getTime(), NOW + 5 * 60 * 1000);
   assert.equal(w.backgroundColor, null, "lock screen widgets stay transparent");
@@ -161,30 +170,30 @@ test("a stale cached org is looked up again once", async () => {
     "https://claude.ai/api/organizations",
     "https://claude.ai/api/organizations/org-max/usage"
   ]);
-  assert.ok(t.includes("42%"));
+  assert.ok(t.includes("2h 30m"));
   assert.equal(JSON.parse(run.files.get(CACHE_PATH)).orgId, "org-max");
 });
 
 test("circular widget shows the 5h ring, or 7d with the parameter", async () => {
   const five = await widget({ family: "accessoryCircular" });
-  assert.deepEqual(five.t, ["42%", "5h"]);
+  assert.deepEqual(five.t, ["2h", "30m"]);
   assert.equal(five.w.addAccessoryWidgetBackground, true);
   assert.ok(five.w.backgroundImage, "ring is drawn");
 
   const seven = await widget({ family: "accessoryCircular", parameter: " 7D " });
-  assert.deepEqual(seven.t, ["18%", "7d"]);
+  assert.deepEqual(seven.t, ["4d", "21h"]);
 });
 
 test("inline widget is one short line", async () => {
-  assert.deepEqual((await widget({ family: "accessoryInline" })).t, ["Claude 5h 42% · 14:30"]);
-  assert.deepEqual((await widget({ family: "accessoryInline", parameter: "7d" })).t, ["Claude 7d 18% · Tue"]);
+  assert.deepEqual((await widget({ family: "accessoryInline" })).t, ["Claude 5h 42% · 2h 30m"]);
+  assert.deepEqual((await widget({ family: "accessoryInline", parameter: "7d" })).t, ["Claude Week 18% · 4d 21h"]);
 });
 
 test("home screen sizes get a background and white text", async () => {
   for (const family of ["small", "medium", "large"]) {
     const { w, t } = await widget({ family });
     assert.ok(w.backgroundColor, `${family} has a background`);
-    assert.deepEqual(t.slice(0, 3), ["5h", "42%", "14:30"]);
+    assert.deepEqual(t, ["5h:", "2h 30m", "Week:", "4d 21h"]);
     const walk = (n) => {
       if (n.kind === "text") assert.equal(n.textColor && n.textColor.hex, "FFFFFF", n.text);
       ("children" in n ? n.children : []).forEach(walk);
@@ -221,13 +230,13 @@ test("Cloudflare challenge is not mistaken for an expired session", async () => 
 test("offline with cache shows the cached numbers and marks them", async () => {
   const route = () => ({ throws: "The Internet connection appears to be offline." });
   const { t, w } = await widget({ family: "accessoryRectangular", files: cache(), route });
-  assert.deepEqual(t, ["5h", "77%", "13:00", "7d", "30%", "Tue", "offline · 11:40"]);
+  assert.deepEqual(t, ["5h:", "1h 0m", "offline", "Week:", "4d 21h"]);
   assert.equal(w.url, "https://claude.ai/settings/usage");
   assert.deepEqual(
     (await widget({ family: "accessoryInline", files: cache(), route })).t,
-    ["Claude 5h 77% · 13:00 (old)"]
+    ["Claude 5h 77% · 1h 0m (old)"]
   );
-  assert.deepEqual((await widget({ family: "accessoryCircular", files: cache(), route })).t, ["77%", "offline"]);
+  assert.deepEqual((await widget({ family: "accessoryCircular", files: cache(), route })).t, ["1h", "offline"]);
 });
 
 test("cached window whose reset has passed shows 0%", async () => {
@@ -238,8 +247,11 @@ test("cached window whose reset has passed shows 0%", async () => {
       sevenDay: { percent: 64, resetAt: Date.parse("2026-10-13T07:00:00Z") }
     }
   });
-  const { t } = await widget({ family: "accessoryRectangular", files, route });
-  assert.deepEqual(t.slice(0, 6), ["5h", "0%", "--", "7d", "64%", "Tue"]);
+  const { t, w } = await widget({ family: "accessoryRectangular", files, route });
+  assert.deepEqual(t, ["5h:", "unused", "offline", "Week:", "4d 21h"]);
+  assert.deepEqual((await widget({ family: "accessoryCircular", files, route })).t, ["5h", "offline"]);
+  const firstBar = w.children.find((c) => c.kind === "image");
+  assert.ok(!firstBar.image.ops.some(([op, c]) => op === "fillColor" && c.alpha === 1), "empty bar");
 });
 
 test("rate limit, server error and garbage replies all keep the cache", async () => {
@@ -252,8 +264,7 @@ test("rate limit, server error and garbage replies all keep the cache", async ()
   for (const [reply, short] of cases) {
     const route = api({ usage: () => reply });
     const { t } = await widget({ family: "accessoryRectangular", files: cache(), route });
-    assert.equal(t[1], "77%");
-    assert.equal(t.at(-1), `${short} · 11:40`);
+    assert.deepEqual(t, ["5h:", "1h 0m", short, "Week:", "4d 21h"]);
   }
 });
 
@@ -267,14 +278,15 @@ test("a full limit and an unused window render cleanly", async () => {
     })
   });
   const { t, w } = await widget({ family: "accessoryRectangular", route });
-  assert.deepEqual(t.slice(0, 6), ["5h", "100%", "12:02", "7d", "0%", "--"]);
+  assert.deepEqual(t, ["5h:", "2m", "Week:", "unused"]);
+  assert.deepEqual((await widget({ family: "accessoryCircular", route })).t, ["2", "min"]);
   assert.equal(w.refreshAfterDate.getTime(), Date.parse("2026-10-08T10:02:15Z"));
 });
 
 test("a reply with only one window still renders", async () => {
   const route = api({ usage: () => ({ body: { five_hour: { utilization: 12, resets_at: "2026-10-08T13:00:00Z" } } }) });
   const { t } = await widget({ family: "accessoryRectangular", route });
-  assert.deepEqual(t.slice(0, 6), ["5h", "12%", "15:00", "7d", "--", "--"]);
+  assert.deepEqual(t, ["5h:", "3h 0m", "Week:", "--"]);
 });
 
 // --- in-app setup -----------------------------------------------------------
