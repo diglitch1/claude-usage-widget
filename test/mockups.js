@@ -1,7 +1,7 @@
 // Renders the README pictures from the widget script's own draw calls (through
 // the Scriptable mock), so they never drift from the code:
 //
-//   docs/lockscreen.svg  the widgets placed on an iPhone lock screen
+//   docs/lockscreen.svg  the widgets on a full iPhone 13 lock screen
 //   docs/states.svg      what the circular widget shows in each situation
 //
 // The circular face is one drawn image, so it is exact apart from the font. The
@@ -17,7 +17,9 @@ const { runScript } = require("./scriptable-mock");
 
 const NOW = Date.parse("2026-10-08T10:00:00Z");
 const KEYCHAIN = { "claude-usage-widget.session-key": "sk-ant-sid01-mockupmockupmockupmockup" };
-const FONT = "ui-rounded, 'SF Pro Rounded', 'SF Pro Display', system-ui, sans-serif";
+// System font stacks: Apple devices render these in SF Pro, the real iOS font.
+const FONT = "ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+const CLOCK_FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif";
 const CIRCLE = 72; // circular widget diameter in points (iPhone 13 class)
 const RECT_W = 158;
 const RECT_H = 72;
@@ -111,49 +113,89 @@ function rectangularSvg(widget, x, y) {
 // Soft iOS-style wallpaper: layered blurred color blobs.
 function wallpaper(id, width, height) {
   return `<defs>
-    <linearGradient id="${id}-base" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0" stop-color="#1d2b4f"/><stop offset="0.5" stop-color="#3b3f7a"/><stop offset="1" stop-color="#7a4a6e"/>
+    <linearGradient id="${id}-base" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#0f1c3d"/><stop offset="0.45" stop-color="#2c3577"/><stop offset="1" stop-color="#5b2f63"/>
     </linearGradient>
-    <filter id="${id}-blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${width / 9}"/></filter>
+    <filter id="${id}-blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${Math.min(width, height) / 6}"/></filter>
   </defs>
   <rect width="${width}" height="${height}" fill="url(#${id}-base)"/>
-  <g filter="url(#${id}-blur)" opacity="0.9">
-    <circle cx="${width * 0.15}" cy="${height * 0.2}" r="${width * 0.38}" fill="#2f8f9d"/>
-    <circle cx="${width * 0.9}" cy="${height * 0.35}" r="${width * 0.34}" fill="#d97757"/>
-    <circle cx="${width * 0.45}" cy="${height * 0.95}" r="${width * 0.4}" fill="#c25b8a"/>
+  <g filter="url(#${id}-blur)" opacity="0.85">
+    <ellipse cx="${width * 0.1}" cy="${height * 0.18}" rx="${width * 0.45}" ry="${height * 0.2}" fill="#2a8fa3"/>
+    <ellipse cx="${width * 0.95}" cy="${height * 0.45}" rx="${width * 0.4}" ry="${height * 0.22}" fill="#e07a4f"/>
+    <ellipse cx="${width * 0.3}" cy="${height * 0.85}" rx="${width * 0.5}" ry="${height * 0.2}" fill="#b4477f"/>
   </g>`;
 }
 
+// Status bar icons of a notch iPhone: signal, Wi-Fi, battery.
+function statusBar(W) {
+  const x = W - 106;
+  const bars = [4, 6.5, 9, 11.5].map((h, i) =>
+    `<rect x="${x + i * 4.5}" y="${28 - h}" width="3" height="${h}" rx="1" fill="#fff"/>`).join("");
+  const wifi = [10, 6.5, 3].map((r, i) =>
+    `<path d="M${x + 33 - r} ${26 - r * 0.3} A${r} ${r} 0 0 1 ${x + 33 + r} ${26 - r * 0.3}" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="${i === 2 ? 1 : 1}"/>`).join("") +
+    `<circle cx="${x + 33}" cy="26.5" r="1.6" fill="#fff"/>`;
+  const battery = `<rect x="${x + 50}" y="16.5" width="25" height="12" rx="3.6" fill="none" stroke="#fff" stroke-opacity="0.45" stroke-width="1"/>
+    <rect x="${x + 52}" y="18.5" width="17" height="8" rx="2" fill="#fff"/>
+    <path d="M${x + 76.5} 20.5 a2 2 0 0 1 0 4" fill="#fff" fill-opacity="0.45"/>`;
+  return bars + wifi + battery;
+}
+
+function padlock(cx, y) {
+  return `<path d="M${cx - 4.5} ${y + 7} v-2.5 a4.5 4.5 0 0 1 9 0 v2.5" fill="none" stroke="#fff" stroke-width="2"/>
+    <rect x="${cx - 7}" y="${y + 6.5}" width="14" height="11" rx="2.6" fill="#fff"/>`;
+}
+
+// Flashlight and camera buttons at the bottom of the lock screen.
+function quickButton(cx, cy, glyph) {
+  return `<circle cx="${cx}" cy="${cy}" r="25" fill="#000" fill-opacity="0.32"/>
+    <circle cx="${cx}" cy="${cy}" r="25" fill="none" stroke="#fff" stroke-opacity="0.12"/>${glyph}`;
+}
+
+const FLASHLIGHT = (cx, cy) => `<path d="M${cx - 6} ${cy - 11} h12 v4 l-3 5 v13 a1.6 1.6 0 0 1 -1.6 1.6 h-2.8 a1.6 1.6 0 0 1 -1.6 -1.6 v-13 l-3 -5 z" fill="#fff"/>
+  <circle cx="${cx}" cy="${cy + 1.5}" r="1.4" fill="#000" fill-opacity="0.5"/>`;
+const CAMERA = (cx, cy) => `<path d="M${cx - 11} ${cy - 5} a2.5 2.5 0 0 1 2.5 -2.5 h3.5 l2 -3 h6 l2 3 h3.5 a2.5 2.5 0 0 1 2.5 2.5 v11 a2.5 2.5 0 0 1 -2.5 2.5 h-17 a2.5 2.5 0 0 1 -2.5 -2.5 z" fill="#fff"/>
+  <circle cx="${cx}" cy="${cy + 1}" r="4.6" fill="#000" fill-opacity="0.55"/><circle cx="${cx}" cy="${cy + 1}" r="3" fill="#fff"/>`;
+
+// A full iPhone 13 lock screen (390 x 844 pt) with the widgets under the clock.
 async function lockscreen() {
   const W = 390;
-  const H = 430;
+  const H = 844;
+  const B = 12; // bezel
   const fiveHour = await render("accessoryCircular", { body: DEMO });
   const week = await render("accessoryCircular", { body: DEMO, parameter: "7d" });
   const rect = await render("accessoryRectangular", { body: usage(42, "2026-10-08T14:38:00Z", 18) });
 
-  // iOS lock screen widget row: 4 columns of 72 pt, 12 pt gaps, centered.
+  // Lock screen widget row: 72 pt columns with 12 pt gaps, centered under the clock.
   const rowWidth = CIRCLE * 2 + RECT_W + 12 * 2;
   const left = (W - rowWidth) / 2;
-  const top = 222;
-  const phone = `
-    <clipPath id="screen"><rect width="${W}" height="${H + 60}" rx="54"/></clipPath>
-    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0.72" stop-color="#fff"/><stop offset="1" stop-color="#000"/>
-    </linearGradient>
-    <mask id="fadeout"><rect width="${W}" height="${H}" fill="url(#fade)"/></mask>`;
+  const top = 236;
+  const notch = `<path d="M${W / 2 - 81} 0 h162 v4 a8 8 0 0 1 -0 0 c0 14 -6 26 -22 26 h-118 c-16 0 -22 -12 -22 -26 z" fill="#000"/>`;
 
-  const screen = `${wallpaper("lock", W, H + 60)}
-    <text x="${W / 2}" y="96" text-anchor="middle" font-family="${FONT}" font-size="21" font-weight="600" fill="#fff" fill-opacity="0.85">Thursday 8 October</text>
-    <text x="${W / 2}" y="196" text-anchor="middle" font-family="${FONT}" font-size="104" font-weight="700" fill="#fff" fill-opacity="0.92" letter-spacing="-2">12:00</text>
-    ${circularSvg(fiveHour, left, top)}
-    ${circularSvg(week, left + CIRCLE + 12, top)}
-    ${rectangularSvg(rect, left + (CIRCLE + 12) * 2, top)}
-    <rect x="${W / 2 - 62}" y="18" width="124" height="34" rx="17" fill="#000"/>`;
+  const screen = `${wallpaper("lock", W, H)}
+    ${notch}
+    ${statusBar(W)}
+    ${padlock(W / 2, 50)}
+    <text x="${W / 2}" y="108" text-anchor="middle" font-family="${FONT}" font-size="21" font-weight="600" fill="#fff" fill-opacity="0.88">Thursday 8 October</text>
+    <text x="${W / 2}" y="206" text-anchor="middle" font-family="${CLOCK_FONT}" font-size="100" font-weight="600" fill="#fff" fill-opacity="0.9" letter-spacing="-3">12:00</text>
+    <g opacity="0.95">
+      ${circularSvg(fiveHour, left, top)}
+      ${circularSvg(week, left + CIRCLE + 12, top)}
+      ${rectangularSvg(rect, left + (CIRCLE + 12) * 2, top)}
+    </g>
+    ${quickButton(70, 772, FLASHLIGHT(70, 772))}
+    ${quickButton(W - 70, 772, CAMERA(W - 70, 772))}
+    <rect x="${W / 2 - 67}" y="${H - 13}" width="134" height="5" rx="2.5" fill="#fff"/>`;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <defs>${phone}</defs>
-  <g mask="url(#fadeout)"><g clip-path="url(#screen)">${screen}</g>
-  <rect x="1.5" y="1.5" width="${W - 3}" height="${H + 60}" rx="53" fill="none" stroke="#111" stroke-width="3"/></g>
+  const OW = W + B * 2;
+  const OH = H + B * 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${OW}" height="${OH}" viewBox="0 0 ${OW} ${OH}">
+  <defs><clipPath id="screen"><rect width="${W}" height="${H}" rx="47"/></clipPath></defs>
+  <rect x="-2" y="120" width="4" height="32" rx="1.5" fill="#2a2a2e"/>
+  <rect x="-2" y="175" width="4" height="62" rx="1.5" fill="#2a2a2e"/>
+  <rect x="-2" y="250" width="4" height="62" rx="1.5" fill="#2a2a2e"/>
+  <rect x="${OW - 2}" y="200" width="4" height="96" rx="1.5" fill="#2a2a2e"/>
+  <rect x="1" y="1" width="${OW - 2}" height="${OH - 2}" rx="58" fill="#0b0b0d" stroke="#3a3a3f" stroke-width="2"/>
+  <g transform="translate(${B},${B})"><g clip-path="url(#screen)">${screen}</g></g>
 </svg>\n`;
 }
 

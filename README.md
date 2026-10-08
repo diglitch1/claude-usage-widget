@@ -5,7 +5,7 @@
 **Your Claude limits on the iPhone lock screen.**<br>
 How much of the 5-hour and weekly window you have used, and when each one resets.
 
-<img src="docs/lockscreen.svg" width="390" alt="iPhone lock screen with a 5h gauge, a weekly gauge and a two-bar usage widget under the clock">
+<img src="docs/lockscreen.svg" width="320" alt="iPhone 13 lock screen with a 5h gauge, a weekly gauge and a two-bar usage widget under the clock">
 
 One JavaScript file for the free [Scriptable](https://apps.apple.com/app/scriptable/id1405459188) app.<br>
 No Mac, no Xcode, no App Store build.
