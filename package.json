@@ -4,6 +4,7 @@
   "description": "Claude usage limits on the iOS lock screen, as a Scriptable widget",
   "scripts": {
     "test": "node --test test/",
-    "live": "node test/live-check.js"
+    "live": "node test/live-check.js",
+    "mockups": "node test/mockups.js"
   }
 }
