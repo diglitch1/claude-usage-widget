@@ -59,9 +59,11 @@ say **Session expired**; repeat this step then.
 
 ### 3. Add the script
 
-1. On the iPhone, open
-   <https://raw.githubusercontent.com/diglitch1/claude-usage-widget/main/claude-usage.js>
-   in Safari, long-press the text, **Select All**, **Copy**.
+1. Get the code onto the phone's clipboard, either way:
+   - KDE Connect from the laptop:
+     `kdeconnect-cli -n <phone> --share-text "$(cat claude-usage.js)"`
+   - Or, logged in to GitHub in Safari (the repo is private), open
+     `claude-usage.js`, tap **Raw**, long-press the text, **Select All**, **Copy**.
 2. In Scriptable tap **+**, paste, tap the title at the top and name it
    `Claude Usage`.
 3. Tap **Run** (bottom right). Paste the session key, tap **Save**.
