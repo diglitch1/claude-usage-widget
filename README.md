@@ -14,7 +14,7 @@ No Mac, no Xcode, no App Store build.
 
 ## What you see
 
-<img src="docs/states.svg" width="100%" alt="The circular widget when plenty is left, almost out, weekly, offline and not set up">
+<img src="docs/states.svg" width="100%" alt="The circular widget for the 5-hour limit, nearly used up, the weekly limit, with no connection, and before setup">
 
 | Widget | Shows |
 | --- | --- |
@@ -45,16 +45,18 @@ The widget signs in with the same cookie your browser uses on claude.ai.
 2. Open the developer tools (`F12`):
    - **Firefox:** **Storage** tab > **Cookies** > `https://claude.ai`
    - **Chrome / Edge:** **Application** tab > **Cookies** > `https://claude.ai`
-3. Find the cookie named exactly **`sessionKey`**. Its value starts with
-   `sk-ant-sid`. Double-click the value and copy it.
+3. Type `sessionKey` into the filter. Several cookies start with that name
+   (`sessionKeyV3LC` and others); you want the one named exactly
+   **`sessionKey`**, whose value starts with `sk-ant-sid`. Widen the Name column
+   if the names are cut off. Double-click the value and copy it.
 4. Send it to your phone over something private (AirDrop, KDE Connect, a note
    that does not sync to anyone else). Do not paste it into chats.
 
 > [!WARNING]
 > The session key is full access to your Claude account. The script stores it in
 > Scriptable's keychain on your phone and only ever sends it to claude.ai.
-> Logging out of claude.ai invalidates it; the widget then says
-> **Session expired** and a tap lets you paste a new one.
+> Logging out of claude.ai invalidates it. The widget then says
+> **Session expired**; tap it and choose **Replace session key**.
 
 ### 3. Add the script
 
@@ -63,8 +65,8 @@ The widget signs in with the same cookie your browser uses on claude.ai.
    in Safari, long-press the text, **Select All**, **Copy**.
 2. In Scriptable tap **+**, paste, and name the script `Claude Usage`.
 3. Tap **Run** and paste your session key.
-4. A menu shows your current usage. **Preview circular widget** and
-   **Preview rectangular widget** show what the lock screen will look like.
+4. A menu shows your current usage. The **Preview** entries show each widget
+   the way the lock screen will.
 
 ### 4. Put it on the lock screen
 
@@ -74,6 +76,10 @@ The widget signs in with the same cookie your browser uses on claude.ai.
 3. Tap the widget you added and set **Script** to `Claude Usage`.
    For a weekly circle, set **Parameter** to `7d`.
 4. For the inline line, tap the date above the clock and pick Scriptable there.
+
+**The layout in the picture above:** two Circular widgets (Parameter empty for
+5 hours, `7d` for the week) and one Rectangular widget. That fills the row under
+the clock.
 
 Run the script any time for the menu: refresh, previews, replace or remove the key.
 
