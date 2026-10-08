@@ -1,7 +1,7 @@
 // Renders the README pictures from the widget script's own draw calls (through
 // the Scriptable mock), so they never drift from the code:
 //
-//   docs/lockscreen.svg  the widgets on a full iPhone 13 lock screen
+//   docs/lockscreen.svg  the widgets under the clock on a lock screen
 //   docs/states.svg      what the circular widget shows in each situation
 //
 // The circular face is one drawn image, so it is exact apart from the font. The
@@ -126,41 +126,10 @@ function wallpaper(id, width, height) {
   </g>`;
 }
 
-// Status bar icons of a notch iPhone: signal, Wi-Fi, battery.
-function statusBar(W) {
-  const x = W - 106;
-  const bars = [4, 6.5, 9, 11.5].map((h, i) =>
-    `<rect x="${x + i * 4.5}" y="${28 - h}" width="3" height="${h}" rx="1" fill="#fff"/>`).join("");
-  const wifi = [10, 6.5, 3].map((r, i) =>
-    `<path d="M${x + 33 - r} ${26 - r * 0.3} A${r} ${r} 0 0 1 ${x + 33 + r} ${26 - r * 0.3}" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity="${i === 2 ? 1 : 1}"/>`).join("") +
-    `<circle cx="${x + 33}" cy="26.5" r="1.6" fill="#fff"/>`;
-  const battery = `<rect x="${x + 50}" y="16.5" width="25" height="12" rx="3.6" fill="none" stroke="#fff" stroke-opacity="0.45" stroke-width="1"/>
-    <rect x="${x + 52}" y="18.5" width="17" height="8" rx="2" fill="#fff"/>
-    <path d="M${x + 76.5} 20.5 a2 2 0 0 1 0 4" fill="#fff" fill-opacity="0.45"/>`;
-  return bars + wifi + battery;
-}
-
-function padlock(cx, y) {
-  return `<path d="M${cx - 4.5} ${y + 7} v-2.5 a4.5 4.5 0 0 1 9 0 v2.5" fill="none" stroke="#fff" stroke-width="2"/>
-    <rect x="${cx - 7}" y="${y + 6.5}" width="14" height="11" rx="2.6" fill="#fff"/>`;
-}
-
-// Flashlight and camera buttons at the bottom of the lock screen.
-function quickButton(cx, cy, glyph) {
-  return `<circle cx="${cx}" cy="${cy}" r="25" fill="#000" fill-opacity="0.32"/>
-    <circle cx="${cx}" cy="${cy}" r="25" fill="none" stroke="#fff" stroke-opacity="0.12"/>${glyph}`;
-}
-
-const FLASHLIGHT = (cx, cy) => `<path d="M${cx - 6} ${cy - 11} h12 v4 l-3 5 v13 a1.6 1.6 0 0 1 -1.6 1.6 h-2.8 a1.6 1.6 0 0 1 -1.6 -1.6 v-13 l-3 -5 z" fill="#fff"/>
-  <circle cx="${cx}" cy="${cy + 1.5}" r="1.4" fill="#000" fill-opacity="0.5"/>`;
-const CAMERA = (cx, cy) => `<path d="M${cx - 11} ${cy - 5} a2.5 2.5 0 0 1 2.5 -2.5 h3.5 l2 -3 h6 l2 3 h3.5 a2.5 2.5 0 0 1 2.5 2.5 v11 a2.5 2.5 0 0 1 -2.5 2.5 h-17 a2.5 2.5 0 0 1 -2.5 -2.5 z" fill="#fff"/>
-  <circle cx="${cx}" cy="${cy + 1}" r="4.6" fill="#000" fill-opacity="0.55"/><circle cx="${cx}" cy="${cy + 1}" r="3" fill="#fff"/>`;
-
-// A full iPhone 13 lock screen (390 x 844 pt) with the widgets under the clock.
+// The top of a lock screen: date, clock and the widget row. No phone frame.
 async function lockscreen() {
   const W = 390;
-  const H = 844;
-  const B = 12; // bezel
+  const H = 290;
   const fiveHour = await render("accessoryCircular", { body: DEMO });
   const week = await render("accessoryCircular", { body: DEMO, parameter: "7d" });
   const rect = await render("accessoryRectangular", { body: usage(42, "2026-10-08T14:38:00Z", 18) });
@@ -168,43 +137,27 @@ async function lockscreen() {
   // Lock screen widget row: 72 pt columns with 12 pt gaps, centered under the clock.
   const rowWidth = CIRCLE * 2 + RECT_W + 12 * 2;
   const left = (W - rowWidth) / 2;
-  const top = 236;
-  const notch = `<path d="M${W / 2 - 81} 0 h162 v4 a8 8 0 0 1 -0 0 c0 14 -6 26 -22 26 h-118 c-16 0 -22 -12 -22 -26 z" fill="#000"/>`;
-
-  const screen = `${wallpaper("lock", W, H)}
-    ${notch}
-    ${statusBar(W)}
-    ${padlock(W / 2, 50)}
-    <text x="${W / 2}" y="108" text-anchor="middle" font-family="${FONT}" font-size="21" font-weight="600" fill="#fff" fill-opacity="0.88">Thursday 8 October</text>
-    <text x="${W / 2}" y="206" text-anchor="middle" font-family="${CLOCK_FONT}" font-size="100" font-weight="600" fill="#fff" fill-opacity="0.9" letter-spacing="-3">12:00</text>
+  const top = 186;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W * 2}" height="${H * 2}" viewBox="0 0 ${W} ${H}">
+  <clipPath id="card"><rect width="${W}" height="${H}" rx="28"/></clipPath>
+  <g clip-path="url(#card)">${wallpaper("lock", W, H * 2.4)}
+    <text x="${W / 2}" y="58" text-anchor="middle" font-family="${FONT}" font-size="21" font-weight="600" fill="#fff" fill-opacity="0.88">Thursday 8 October</text>
+    <text x="${W / 2}" y="156" text-anchor="middle" font-family="${CLOCK_FONT}" font-size="100" font-weight="600" fill="#fff" fill-opacity="0.9" letter-spacing="-3">12:00</text>
     <g opacity="0.95">
       ${circularSvg(fiveHour, left, top)}
       ${circularSvg(week, left + CIRCLE + 12, top)}
       ${rectangularSvg(rect, left + (CIRCLE + 12) * 2, top)}
     </g>
-    ${quickButton(70, 772, FLASHLIGHT(70, 772))}
-    ${quickButton(W - 70, 772, CAMERA(W - 70, 772))}
-    <rect x="${W / 2 - 67}" y="${H - 13}" width="134" height="5" rx="2.5" fill="#fff"/>`;
-
-  const OW = W + B * 2;
-  const OH = H + B * 2;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${OW}" height="${OH}" viewBox="0 0 ${OW} ${OH}">
-  <defs><clipPath id="screen"><rect width="${W}" height="${H}" rx="47"/></clipPath></defs>
-  <rect x="-2" y="120" width="4" height="32" rx="1.5" fill="#2a2a2e"/>
-  <rect x="-2" y="175" width="4" height="62" rx="1.5" fill="#2a2a2e"/>
-  <rect x="-2" y="250" width="4" height="62" rx="1.5" fill="#2a2a2e"/>
-  <rect x="${OW - 2}" y="200" width="4" height="96" rx="1.5" fill="#2a2a2e"/>
-  <rect x="1" y="1" width="${OW - 2}" height="${OH - 2}" rx="58" fill="#0b0b0d" stroke="#3a3a3f" stroke-width="2"/>
-  <g transform="translate(${B},${B})"><g clip-path="url(#screen)">${screen}</g></g>
+  </g>
 </svg>\n`;
 }
 
 async function states() {
   const cases = [
-    ["Plenty left", { body: DEMO }],
-    ["Almost out", { body: usage(81, "2026-10-08T10:38:00Z", 63) }],
-    ["Weekly (7d)", { body: DEMO, parameter: "7d" }],
-    ["Offline", {
+    ["5-hour limit", "42% used · resets in 1h 44m", { body: DEMO }],
+    ["5-hour limit", "81% used · resets in 38 min", { body: usage(81, "2026-10-08T10:38:00Z", 63) }],
+    ["Weekly limit (7d)", "18% used · resets in 4d 21h", { body: DEMO, parameter: "7d" }],
+    ["No connection", "last known: 77% used", {
       files: {
         "/docs/claude-usage-widget-cache.json": JSON.stringify({
           orgId: "org",
@@ -217,17 +170,18 @@ async function states() {
       },
       route: () => ({ throws: "offline" })
     }],
-    ["Not set up", { keychain: {} }]
+    ["Not set up yet", "tap it to add your key", { keychain: {} }]
   ];
-  const cell = 100;
+  const cell = 150;
   const W = cases.length * cell + 20;
-  const H = 136;
+  const H = 150;
   let body = "";
-  for (const [index, [caption, options]] of cases.entries()) {
+  for (const [index, [title, detail, options]] of cases.entries()) {
     const widget = await render("accessoryCircular", options);
     const x = 10 + index * cell + (cell - CIRCLE) / 2;
     body += circularSvg(widget, x, 20);
-    body += `<text x="${x + CIRCLE / 2}" y="118" text-anchor="middle" font-family="${FONT}" font-size="11" font-weight="600" fill="#fff" fill-opacity="0.9">${esc(caption)}</text>`;
+    body += `<text x="${x + CIRCLE / 2}" y="118" text-anchor="middle" font-family="${FONT}" font-size="12" font-weight="700" fill="#fff">${esc(title)}</text>`;
+    body += `<text x="${x + CIRCLE / 2}" y="134" text-anchor="middle" font-family="${FONT}" font-size="10" font-weight="500" fill="#fff" fill-opacity="0.75">${esc(detail)}</text>`;
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W * 2}" height="${H * 2}" viewBox="0 0 ${W} ${H}">
   <clipPath id="card"><rect width="${W}" height="${H}" rx="22"/></clipPath>
