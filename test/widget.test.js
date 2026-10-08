@@ -176,12 +176,17 @@ test("a stale cached org is looked up again once", async () => {
 
 test("circular widget shows the 5h ring, or 7d with the parameter", async () => {
   const five = await widget({ family: "accessoryCircular" });
-  assert.deepEqual(five.t, ["2h", "30m"]);
+  assert.deepEqual(five.t, ["2h", "30m", "42%"]);
   assert.equal(five.w.addAccessoryWidgetBackground, true);
-  assert.ok(five.w.backgroundImage, "ring is drawn");
+  // iOS ignores backgroundImage on the lock screen: the gauges must be content.
+  assert.equal(five.w.backgroundImage, null);
+  const [face] = five.w.children;
+  assert.equal(face.kind, "image");
+  const fills = face.image.ops.filter(([op]) => op === "fill").length;
+  assert.equal(fills, 4, "outer and inner gauge, each track + used part");
 
   const seven = await widget({ family: "accessoryCircular", parameter: " 7D " });
-  assert.deepEqual(seven.t, ["4d", "21h"]);
+  assert.deepEqual(seven.t, ["4d", "21h", "18%"]);
 });
 
 test("inline widget is one short line", async () => {
@@ -208,7 +213,9 @@ test("no session key: setup prompt that opens the script", async () => {
   assert.equal(w.url, "scriptable:///run/Claude%20Usage");
   assert.equal(run.requests.length, 0, "never calls the API without a key");
   assert.deepEqual((await widget({ family: "accessoryInline", keychain: {} })).t, ["Claude: setup"]);
-  assert.deepEqual((await widget({ family: "accessoryCircular", keychain: {} })).t, ["!", "setup"]);
+  const setup = await widget({ family: "accessoryCircular", keychain: {} });
+  assert.deepEqual(setup.t, ["!", "setup"]);
+  assert.equal(setup.w.children[0].image.ops.filter(([op]) => op === "fill").length, 1, "empty outer track only");
 });
 
 test("expired session without cache asks for a new key", async () => {
@@ -236,7 +243,7 @@ test("offline with cache shows the cached numbers and marks them", async () => {
     (await widget({ family: "accessoryInline", files: cache(), route })).t,
     ["Claude 5h 77% · 1h 0m (old)"]
   );
-  assert.deepEqual((await widget({ family: "accessoryCircular", files: cache(), route })).t, ["1h", "offline"]);
+  assert.deepEqual((await widget({ family: "accessoryCircular", files: cache(), route })).t, ["1h", "offline", "77%"]);
 });
 
 test("cached window whose reset has passed shows 0%", async () => {
@@ -249,7 +256,7 @@ test("cached window whose reset has passed shows 0%", async () => {
   });
   const { t, w } = await widget({ family: "accessoryRectangular", files, route });
   assert.deepEqual(t, ["5h:", "unused", "offline", "Week:", "4d 21h"]);
-  assert.deepEqual((await widget({ family: "accessoryCircular", files, route })).t, ["5h", "offline"]);
+  assert.deepEqual((await widget({ family: "accessoryCircular", files, route })).t, ["5h", "offline", "0%"]);
   const firstBar = w.children.find((c) => c.kind === "image");
   assert.ok(!firstBar.image.ops.some(([op, c]) => op === "fillColor" && c.alpha === 1), "empty bar");
 });
@@ -279,7 +286,7 @@ test("a full limit and an unused window render cleanly", async () => {
   });
   const { t, w } = await widget({ family: "accessoryRectangular", route });
   assert.deepEqual(t, ["5h:", "2m", "Week:", "unused"]);
-  assert.deepEqual((await widget({ family: "accessoryCircular", route })).t, ["2", "min"]);
+  assert.deepEqual((await widget({ family: "accessoryCircular", route })).t, ["2", "min", "100%"]);
   assert.equal(w.refreshAfterDate.getTime(), Date.parse("2026-10-08T10:02:15Z"));
 });
 

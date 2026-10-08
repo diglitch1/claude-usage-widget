@@ -92,6 +92,13 @@ function createRuntime(options = {}) {
     setFillColor(c) { this.ops.push(["fillColor", c]); }
     setStrokeColor(c) { this.ops.push(["strokeColor", c]); }
     setLineWidth(w) { this.ops.push(["lineWidth", w]); }
+    setFont(f) { this.ops.push(["font", f]); }
+    setTextColor(c) { this.ops.push(["textColor", c]); }
+    setTextAlignedCenter() { this.ops.push(["alignCenter"]); }
+    drawTextInRect(text, rect) {
+      if (typeof text !== "string") throw new Error("drawTextInRect needs a string");
+      this.ops.push(["text", text, rect]);
+    }
     getImage() {
       if (!this.size) throw new Error("DrawContext.size not set");
       return new Image(this.ops);
@@ -114,6 +121,9 @@ function createRuntime(options = {}) {
       return strict(this, ["image", "resizable", "imageSize", "imageOpacity", "cornerRadius",
         "borderWidth", "borderColor", "containerRelativeShape", "tintColor", "url"]);
     }
+    leftAlignImage() {}
+    centerAlignImage() {}
+    rightAlignImage() {}
   }
   class WidgetSpacer {
     constructor(length) { this.kind = "spacer"; this.length = length ?? null; return strict(this, ["length"]); }
@@ -268,11 +278,15 @@ async function loadHelpers(options = {}) {
   return helpers;
 }
 
-// Flattens a widget tree to its visible strings, in order.
+// Flattens a widget tree to its visible strings, in order, including text drawn
+// into images.
 function texts(node) {
   const out = [];
   const walk = (n) => {
     if (n.kind === "text") out.push(n.text);
+    if (n.kind === "image") {
+      for (const op of n.image.ops) if (op[0] === "text" && op[1]) out.push(op[1]);
+    }
     for (const child of "children" in n ? n.children : []) walk(child);
   };
   walk(node);

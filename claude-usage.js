@@ -373,28 +373,45 @@ function arcBand(center, radius, width, start, sweep) {
   return path;
 }
 
-// Gauge open at the bottom, like Apple's own circular widgets. The bold part is
-// the share of the window already used.
-function gaugeImage(percent) {
-  const size = 120;
-  const width = 12;
+function drawGauge(ctx, center, radius, width, percent, trackAlpha) {
   const start = 0.75 * Math.PI;
   const sweep = 1.5 * Math.PI;
-  const radius = size / 2 - width / 2 - 4;
+  ctx.addPath(arcBand(center, radius, width, start, sweep));
+  ctx.setFillColor(new Color("#FFFFFF", trackAlpha));
+  ctx.fillPath();
+  if (percent > 0) {
+    ctx.addPath(arcBand(center, radius, width, start, (sweep * Math.min(percent, 100)) / 100));
+    ctx.setFillColor(Color.white());
+    ctx.fillPath();
+  }
+}
+
+function drawCentered(ctx, text, font, alpha, top, height, size) {
+  ctx.setFont(font);
+  ctx.setTextColor(new Color("#FFFFFF", alpha));
+  ctx.setTextAlignedCenter();
+  ctx.drawTextInRect(text, new Rect(0, top, size, height));
+}
+
+// The whole circular widget as one image. iOS drops a widget's background image
+// on the lock screen, so the arcs have to be real content, and the text goes in
+// the same image to sit exactly inside them.
+//   outer bold gauge: main window used   inner thin gauge: other window used
+//   center: time until the main reset    bottom gap: main window percent
+function circularImage(face) {
+  const size = 180;
   const ctx = new DrawContext();
   ctx.size = new Size(size, size);
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
-  ctx.addPath(arcBand(size / 2, radius, width, start, sweep));
-  ctx.setFillColor(new Color("#FFFFFF", 0.3));
-  ctx.fillPath();
-
-  if (percent > 0) {
-    ctx.addPath(arcBand(size / 2, radius, width, start, (sweep * Math.min(percent, 100)) / 100));
-    ctx.setFillColor(Color.white());
-    ctx.fillPath();
+  drawGauge(ctx, size / 2, 76, 16, face.mainPercent, 0.3);
+  if (face.otherPercent !== null) {
+    drawGauge(ctx, size / 2, 56, 7, face.otherPercent, 0.25);
   }
+  drawCentered(ctx, face.big, Font.boldRoundedSystemFont(44), 1, 44, 54, size);
+  drawCentered(ctx, face.small, Font.semiboldRoundedSystemFont(24), 0.8, 96, 30, size);
+  drawCentered(ctx, face.bottom, Font.boldRoundedSystemFont(22), 1, 146, 28, size);
   return ctx.getImage();
 }
 
@@ -460,37 +477,30 @@ function buildRectangular(widget, state, now, theme) {
   });
 }
 
+function circularFace(state, now, windowKey) {
+  const usage = state.result && state.result.usage;
+  if (!usage) {
+    const short = ERRORS[state.error ? state.error.kind : "no-key"].short;
+    return { mainPercent: 0, otherPercent: null, big: "!", small: short, bottom: "" };
+  }
+  const otherKey = windowKey === "sevenDay" ? "fiveHour" : "sevenDay";
+  const main = currentWindow(usage[windowKey], now);
+  const other = currentWindow(usage[otherKey], now);
+  const parts = main && main.resetAt !== null ? countdownParts(main.resetAt, now) : null;
+  return {
+    mainPercent: main ? main.percent : 0,
+    otherPercent: other ? other.percent : 0,
+    big: parts ? parts.big : windowKey === "sevenDay" ? "7d" : "5h",
+    small: state.error ? ERRORS[state.error.kind].short : parts ? parts.small : idleText(main),
+    bottom: percentText(main)
+  };
+}
+
 function buildCircular(widget, state, now, windowKey) {
   widget.addAccessoryWidgetBackground = true;
-  const usage = state.result && state.result.usage;
-  const win = usage ? currentWindow(usage[windowKey], now) : null;
-  widget.backgroundImage = gaugeImage(win ? win.percent : 0);
-
-  let big;
-  let small;
-  if (!usage) {
-    big = "!";
-    small = ERRORS[state.error ? state.error.kind : "no-key"].short;
-  } else {
-    const parts = win && win.resetAt !== null ? countdownParts(win.resetAt, now) : null;
-    big = parts ? parts.big : windowKey === "sevenDay" ? "7d" : "5h";
-    small = parts ? parts.small : idleText(win);
-    if (state.error) {
-      small = ERRORS[state.error.kind].short;
-    }
-  }
-
-  const centered = (text, font, opacity) => {
-    const row = widget.addStack();
-    row.layoutHorizontally();
-    row.addSpacer();
-    addLine(row, text, font, opacity);
-    row.addSpacer();
-  };
-  widget.addSpacer();
-  centered(big, Font.boldRoundedSystemFont(20));
-  centered(small, Font.mediumRoundedSystemFont(11), 0.8);
-  widget.addSpacer();
+  widget.setPadding(0, 0, 0, 0);
+  const image = widget.addImage(circularImage(circularFace(state, now, windowKey)));
+  image.centerAlignImage();
 }
 
 function buildInline(widget, state, now, windowKey) {
@@ -729,7 +739,7 @@ async function main() {
 if (typeof __CLAUDE_USAGE_TEST__ === "function") {
   __CLAUDE_USAGE_TEST__({
     normalizeSessionKey, looksLikeSessionKey, readWindow, normalizeUsage, pickOrganization,
-    currentWindow, countdownParts, formatCountdown, formatResetLong, nextRefresh, describe, buildWidget, main
+    currentWindow, countdownParts, circularFace, formatCountdown, formatResetLong, nextRefresh, describe, buildWidget, main
   });
 } else {
   await main();
