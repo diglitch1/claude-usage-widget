@@ -1,0 +1,9 @@
+{
+  "name": "claude-usage-widget",
+  "private": true,
+  "description": "Claude usage limits on the iOS lock screen, as a Scriptable widget",
+  "scripts": {
+    "test": "node --test test/",
+    "live": "node test/live-check.js"
+  }
+}
