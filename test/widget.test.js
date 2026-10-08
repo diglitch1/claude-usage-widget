@@ -177,13 +177,14 @@ test("a stale cached org is looked up again once", async () => {
 test("circular widget shows the 5h ring, or 7d with the parameter", async () => {
   const five = await widget({ family: "accessoryCircular" });
   assert.deepEqual(five.t, ["2h", "30m", "42%"]);
-  assert.equal(five.w.addAccessoryWidgetBackground, true);
+  assert.equal(five.w.addAccessoryWidgetBackground, null, "no disc, like Apple's gauges");
+  assert.ok(five.w.padding.every((p) => p < 0), "image bleeds over the system inset");
   // iOS ignores backgroundImage on the lock screen: the gauges must be content.
   assert.equal(five.w.backgroundImage, null);
   const [face] = five.w.children;
   assert.equal(face.kind, "image");
   const fills = face.image.ops.filter(([op]) => op === "fill").length;
-  assert.equal(fills, 4, "outer and inner gauge, each track + used part");
+  assert.equal(fills, 2, "gauge track + used part");
 
   const seven = await widget({ family: "accessoryCircular", parameter: " 7D " });
   assert.deepEqual(seven.t, ["4d", "21h", "18%"]);

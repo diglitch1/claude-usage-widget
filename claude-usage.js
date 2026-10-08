@@ -16,6 +16,11 @@ const KEYCHAIN_KEY = "claude-usage-widget.session-key";
 const CACHE_FILE = "claude-usage-widget-cache.json";
 const REFRESH_MS = 5 * 60 * 1000;
 const REQUEST_TIMEOUT_S = 15;
+// iOS insets Scriptable's circular lock screen widget by a few points, which
+// left the gauge floating small inside the circle. Negative padding pushes the
+// image back out to the edge. Raise it if the ring still looks inset, lower it
+// if the ring gets clipped.
+const CIRCULAR_BLEED = 6;
 const USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 " +
   "(KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1";
@@ -396,8 +401,9 @@ function drawCentered(ctx, text, font, alpha, top, height, size) {
 // The whole circular widget as one image. iOS drops a widget's background image
 // on the lock screen, so the arcs have to be real content, and the text goes in
 // the same image to sit exactly inside them.
-//   outer bold gauge: main window used   inner thin gauge: other window used
-//   center: time until the main reset    bottom gap: main window percent
+//   gauge: share of the window used   center: time until it resets
+//   bottom gap: the exact percent
+// One ring only: a second, inner ring left no room for readable text.
 function circularImage(face) {
   const size = 180;
   const ctx = new DrawContext();
@@ -405,13 +411,10 @@ function circularImage(face) {
   ctx.opaque = false;
   ctx.respectScreenScale = false;
 
-  drawGauge(ctx, size / 2, 76, 16, face.mainPercent, 0.3);
-  if (face.otherPercent !== null) {
-    drawGauge(ctx, size / 2, 56, 7, face.otherPercent, 0.25);
-  }
-  drawCentered(ctx, face.big, Font.boldRoundedSystemFont(44), 1, 44, 54, size);
-  drawCentered(ctx, face.small, Font.semiboldRoundedSystemFont(24), 0.8, 96, 30, size);
-  drawCentered(ctx, face.bottom, Font.boldRoundedSystemFont(22), 1, 146, 28, size);
+  drawGauge(ctx, size / 2, 80, 17, face.percent, 0.3);
+  drawCentered(ctx, face.big, Font.boldRoundedSystemFont(66), 1, 30, 76, size);
+  drawCentered(ctx, face.small, Font.semiboldRoundedSystemFont(32), 0.85, 100, 38, size);
+  drawCentered(ctx, face.bottom, Font.boldRoundedSystemFont(26), 1, 144, 32, size);
   return ctx.getImage();
 }
 
@@ -481,15 +484,12 @@ function circularFace(state, now, windowKey) {
   const usage = state.result && state.result.usage;
   if (!usage) {
     const short = ERRORS[state.error ? state.error.kind : "no-key"].short;
-    return { mainPercent: 0, otherPercent: null, big: "!", small: short, bottom: "" };
+    return { percent: 0, big: "!", small: short, bottom: "" };
   }
-  const otherKey = windowKey === "sevenDay" ? "fiveHour" : "sevenDay";
   const main = currentWindow(usage[windowKey], now);
-  const other = currentWindow(usage[otherKey], now);
   const parts = main && main.resetAt !== null ? countdownParts(main.resetAt, now) : null;
   return {
-    mainPercent: main ? main.percent : 0,
-    otherPercent: other ? other.percent : 0,
+    percent: main ? main.percent : 0,
     big: parts ? parts.big : windowKey === "sevenDay" ? "7d" : "5h",
     small: state.error ? ERRORS[state.error.kind].short : parts ? parts.small : idleText(main),
     bottom: percentText(main)
@@ -497,8 +497,7 @@ function circularFace(state, now, windowKey) {
 }
 
 function buildCircular(widget, state, now, windowKey) {
-  widget.addAccessoryWidgetBackground = true;
-  widget.setPadding(0, 0, 0, 0);
+  widget.setPadding(-CIRCULAR_BLEED, -CIRCULAR_BLEED, -CIRCULAR_BLEED, -CIRCULAR_BLEED);
   const image = widget.addImage(circularImage(circularFace(state, now, windowKey)));
   image.centerAlignImage();
 }
